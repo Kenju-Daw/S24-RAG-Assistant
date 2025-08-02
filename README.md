@@ -1,2 +1,8 @@
 # S24-RAG-Assistant
-My personal AI assistant
+
+A fully private, on-device RAG personal assistant for Samsung S24 Ultra.
+
+## Features
+- 100% Private processing
+- GitHub remote control
+- Personal knowledge base
