@@ -14,36 +14,23 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
-// ── Request / Response data classes ───────────────────────────────────────────
-
 @Serializable
-data class ChatMessage(
-    val role: String,
-    val content: String
-)
+data class ChatMessage(val role: String, val content: String)
 
 @Serializable
 data class ChatCompletionRequest(
     val model: String,
     val messages: List<ChatMessage>,
     val stream: Boolean = false,
-    val max_tokens: Int = 512,
+    val max_tokens: Int = 4096,
     val temperature: Float = 0.7f
 )
 
 @Serializable
-data class ChatChoice(
-    val index: Int,
-    val message: ChatMessage,
-    val finish_reason: String
-)
+data class ChatChoice(val index: Int, val message: ChatMessage, val finish_reason: String)
 
 @Serializable
-data class Usage(
-    val prompt_tokens: Int,
-    val completion_tokens: Int,
-    val total_tokens: Int
-)
+data class Usage(val prompt_tokens: Int, val completion_tokens: Int, val total_tokens: Int)
 
 @Serializable
 data class ChatCompletionResponse(
@@ -54,7 +41,6 @@ data class ChatCompletionResponse(
     val usage: Usage
 )
 
-// SSE delta wrapper for streaming responses
 @Serializable
 data class DeltaContent(val content: String)
 
@@ -69,16 +55,6 @@ data class ChatCompletionChunk(
     val choices: List<StreamChoice>
 )
 
-// ── Ktor Server ────────────────────────────────────────────────────────────────
-
-/**
- * KtorServer — OpenAI-compatible HTTP server
- *
- * Binds to 127.0.0.1:8080 (loopback only — not exposed to network).
- * Routes:
- *   GET  /health                    → 200 OK
- *   POST /v1/chat/completions       → OpenAI-compatible inference endpoint
- */
 object KtorServer {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -94,71 +70,85 @@ object KtorServer {
 
         routing {
             get("/health") {
-                call.respondText("Project Claw OK", status = HttpStatusCode.OK)
+                if (LlmEngine.isInitialized) {
+                    call.respondText("Project Claw OK - Engine Ready", status = HttpStatusCode.OK)
+                } else {
+                    call.respondText("Project Claw OK - Engine Not Initialized", status = HttpStatusCode.ServiceUnavailable)
+                }
             }
 
             post("/v1/chat/completions") {
                 val request = call.receive<ChatCompletionRequest>()
                 val requestId = "chatcmpl-${UUID.randomUUID()}"
 
-                // Build prompt from messages
-                // TODO Phase 3: Apply Gemma 4 control token formatting here
-                val prompt = request.messages.joinToString("\n") { "${it.role}: ${it.content}" }
+                // Simplified prompt extraction - assume last message is user for now
+                // In Phase 5 we will build the full conversation history
+                val prompt = request.messages.lastOrNull { it.role == "user" }?.content ?: ""
+
+                if (!LlmEngine.isInitialized) {
+                    call.respond(HttpStatusCode.ServiceUnavailable, "Engine not initialized")
+                    return@post
+                }
 
                 if (request.stream) {
-                    // ── SSE Streaming Response ──────────────────────────────
                     call.response.header(HttpHeaders.CacheControl, "no-cache")
                     call.respondTextWriter(
                         contentType = ContentType.Text.EventStream,
                         status = HttpStatusCode.OK
                     ) {
-                        // TODO Phase 3: Replace with LlmEngine.generate() token stream
-                        val stubTokens = listOf("Hello", " from", " Project", " Claw", ".")
-
-                        stubTokens.forEach { token ->
-                            val chunk = ChatCompletionChunk(
-                                id = requestId,
-                                model = request.model,
-                                choices = listOf(
-                                    StreamChoice(
-                                        index = 0,
-                                        delta = DeltaContent(content = token),
-                                        finish_reason = null
+                        try {
+                            LlmEngine.generate(
+                                userMessage = prompt,
+                                onToken = { token ->
+                                    val chunk = ChatCompletionChunk(
+                                        id = requestId,
+                                        model = request.model,
+                                        choices = listOf(
+                                            StreamChoice(
+                                                index = 0,
+                                                delta = DeltaContent(content = token),
+                                                finish_reason = null
+                                            )
+                                        )
                                     )
-                                )
+                                    write("data: ${json.encodeToString(chunk)}\n\n")
+                                    flush()
+                                },
+                                onDone = {
+                                    write("data: [DONE]\n\n")
+                                    flush()
+                                },
+                                onError = { t ->
+                                    // Log or handle error here
+                                    write("event: error\ndata: ${t.message}\n\n")
+                                    flush()
+                                }
                             )
-                            write("data: ${json.encodeToString(chunk)}\n\n")
+                        } catch (e: Exception) {
+                            write("event: error\ndata: ${e.message}\n\n")
                             flush()
                         }
-
-                        // Final [DONE] sentinel — required by OpenAI SSE spec
-                        write("data: [DONE]\n\n")
-                        flush()
                     }
                 } else {
-                    // ── Standard JSON Response ──────────────────────────────
-                    var fullResponse = ""
+                    try {
+                        val fullResponse = LlmEngine.generateBlocking(prompt)
 
-                    // TODO Phase 3: Replace with LlmEngine.generate()
-                    LlmEngine.generate(prompt) { token -> fullResponse += token }
-
-                    val response = ChatCompletionResponse(
-                        id = requestId,
-                        model = request.model,
-                        choices = listOf(
-                            ChatChoice(
-                                index = 0,
-                                message = ChatMessage(role = "assistant", content = fullResponse),
-                                finish_reason = "stop"
-                            )
-                        ),
-                        usage = Usage(
-                            prompt_tokens = prompt.length / 4,
-                            completion_tokens = fullResponse.length / 4,
-                            total_tokens = (prompt.length + fullResponse.length) / 4
+                        val response = ChatCompletionResponse(
+                            id = requestId,
+                            model = request.model,
+                            choices = listOf(
+                                ChatChoice(
+                                    index = 0,
+                                    message = ChatMessage(role = "assistant", content = fullResponse),
+                                    finish_reason = "stop"
+                                )
+                            ),
+                            usage = Usage(0, 0, 0) // Usage stats mock
                         )
-                    )
-                    call.respond(HttpStatusCode.OK, response)
+                        call.respond(HttpStatusCode.OK, response)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.InternalServerError, "Inference failed: ${e.message}")
+                    }
                 }
             }
         }
