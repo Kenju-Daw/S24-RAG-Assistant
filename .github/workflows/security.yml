@@ -1,0 +1,59 @@
+name: 🔒 Security
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/build.gradle.kts"
+      - "app/settings.gradle.kts"
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly scan every Monday 00:00 UTC
+    - cron: "0 0 * * 1"
+
+jobs:
+  dependency-audit:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Run OWASP Dependency Check
+        working-directory: app
+        run: |
+          ./gradlew dependencyCheckAnalyze --no-daemon || true
+
+      - name: Upload dependency report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-check-report-${{ github.sha }}
+          path: app/build/reports/dependency-check-report.html
+          retention-days: 30
+
+  secrets-scan:
+    name: Secrets & Credential Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
