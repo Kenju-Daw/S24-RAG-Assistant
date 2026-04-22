@@ -32,12 +32,12 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Make gradlew executable
-        run: chmod +x app/gradlew
+        run: chmod +x app/gradlew || true
         continue-on-error: true
 
       - name: Assemble Debug
         working-directory: app
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

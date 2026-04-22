@@ -25,7 +25,7 @@ jobs:
 
       - name: Build Release APK
         working-directory: app
-        run: ./gradlew assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

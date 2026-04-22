@@ -30,7 +30,7 @@ jobs:
 
       - name: Run Android Lint
         working-directory: app
-        run: ./gradlew lint --no-daemon
+        run: gradle lint --no-daemon
 
       - name: Upload lint report
         uses: actions/upload-artifact@v4

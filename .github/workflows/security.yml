@@ -33,7 +33,7 @@ jobs:
       - name: Run OWASP Dependency Check
         working-directory: app
         run: |
-          ./gradlew dependencyCheckAnalyze --no-daemon || true
+          gradle dependencyCheckAnalyze --no-daemon || true
 
       - name: Upload dependency report
         uses: actions/upload-artifact@v4
