@@ -1,18 +1,42 @@
-# Project Claw
+# S24-RAG-Assistant
 
-Headless Android AI Inference Engine — Gemma 4 E2B on Samsung Galaxy S24 Ultra
+A fully private, on-device RAG (Retrieval-Augmented Generation) personal assistant for Samsung S24 Ultra with GitHub integration.
+
+## Features
+
+- **100% Private**: All processing happens on your device
+- **GitHub Integration**: Pull and push changes directly from the app
+- **Knowledge Base**: Upload and query your personal documents
+- **Remote Control**: Execute Termux commands via GitHub issues
+- **Voice Interface**: Talk to your assistant (coming soon)
+
+## Quick Start
+
+### Option 1: One-Command Installation
+
+1. Open Termux on your Samsung S24 Ultra
+2. Run:
+   ```bash
+   bash <(curl -sSL https://raw.githubusercontent.com/Kenju-Daw/S24-RAG-Assistant/main/install.sh)
+   ```
+
+---
+
+# Project Claw — Headless Android AI Inference Engine
+
+Gemma 4 E2B on Samsung Galaxy S24 Ultra via LiteRT-LM
 
 ## Overview
 
-Project Claw is a persistent, headless AI inference backend running as an Android Foreground Service. It exposes an OpenAI-compatible REST API (`/v1/chat/completions`) on `127.0.0.1:8080`, enabling CLI agents and local sandbox environments to route inference requests to a native, GPU-accelerated Gemma 4 E2B model.
+Project Claw is the **local inference core** of the S24 RAG Assistant. It runs as a persistent Android Foreground Service exposing an OpenAI-compatible REST API (`/v1/chat/completions`) on `127.0.0.1:8080`, enabling all local agents and Termux workflows to route inference to a native, GPU-accelerated Gemma 4 E2B model — with zero cloud dependency.
 
 ## Hardware Target
 
 - **Device:** Samsung Galaxy S24 Ultra
 - **SoC:** Qualcomm Snapdragon 8 Gen 3 (SM8650)
-- **GPU:** Adreno 750
+- **GPU:** Adreno 750 (ML Drift delegate — 3808 tk/s prefill)
 - **RAM:** 12 GB LPDDR5X
-- **Model:** Gemma 4 E2B (4-bit quantized, 2.58 GB)
+- **Model:** Gemma 4 E2B (4-bit quantized, 2.58 GB, 128K context)
 
 ## Architecture
 
@@ -25,7 +49,6 @@ Project Claw is a persistent, headless AI inference backend running as an Androi
                     │ (127.0.0.1:8080)
 ┌───────────────────▼─────────────────────────┐
 │           Ktor HTTP Server (Netty)           │
-│           Content Negotiation (JSON)         │
 │           SSE Streaming Support              │
 ├─────────────────────────────────────────────┤
 │           OpenAI Compatibility Layer         │
@@ -51,48 +74,23 @@ Project Claw is a persistent, headless AI inference backend running as an Androi
 project-claw/
 ├── README.md                          # This file
 ├── docs/
-│   └── architectural_blueprint.md     # Full technical spec (from Google Doc)
+│   └── architectural_blueprint.md     # Full technical spec
 ├── research/
 │   └── mediapipe_vs_litert_lm.md      # Runtime comparison analysis
 └── app/                               # Android project (Phase 1+)
     └── (to be scaffolded)
 ```
 
-## Key Documents
-
-| Document | Location |
-|----------|----------|
-| Architectural Blueprint | `docs/` + Knowledge (`knowledge/project-claw/`) |
-| MediaPipe vs LiteRT-LM Analysis | `research/mediapipe_vs_litert_lm.md` |
-| Implementation Plan | Antigravity artifact (session-scoped) |
-
-## Runtime Decision
-
-**LiteRT-LM** (not MediaPipe LLM). See [research/mediapipe_vs_litert_lm.md](research/mediapipe_vs_litert_lm.md) for full analysis.
-
-| Factor | MediaPipe LLM | LiteRT-LM (chosen) |
-|--------|:---:|:---:|
-| Status | ⚠️ Deprecated | ✅ Production |
-| Constrained Decoding | ❌ | ✅ |
-| Session Cloning | ❌ | ✅ |
-| C++ API | ❌ | ✅ |
-| GPU (ML Drift) | ✅ Basic | ✅ Advanced |
-
-## Phase 0: Hardware Validation
-
-**Fastest validation path:** Install [AI Edge Gallery](https://github.com/google-ai-edge/gallery) on S24U. Zero code required — tests model loading, GPU acceleration, and inference speed immediately.
-
 ## Status
 
 - [x] Architectural blueprint researched and documented
-- [x] Runtime decision made (LiteRT-LM)
+- [x] Runtime decision made (LiteRT-LM v0.10.2)
 - [x] MediaPipe vs LiteRT-LM comparison completed
-- [x] Project folder created
-- [x] Archived to Antigravity knowledge system
-- [ ] Phase 0: Hardware validation on S24U
+- [x] Pushed to S24-RAG-Assistant repo
+- [ ] Phase 0: Hardware validation (AI Edge Gallery on S24U)
 - [ ] Phase 1: Android project scaffolding
 - [ ] Phase 2: Kotlin engine + Ktor server
-- [ ] Phase 3: Native C++/JNI bridge (optional optimization)
+- [ ] Phase 3: Native C++/JNI bridge
 - [ ] Phase 4: Hardening (memory, thermals, security)
-- [ ] Phase 5: Agent integration
+- [ ] Phase 5: RAG integration with S24-RAG-Assistant
 - [ ] Phase 6: Polish & release

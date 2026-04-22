@@ -1,0 +1,51 @@
+#!/bin/bash
+# Git Setup Script for S24-RAG-Assistant
+
+set -e
+
+echo "Setting up Git for S24-RAG-Assistant..."
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Get user information
+echo -e "${YELLOW}Please enter your Git configuration:${NC}"
+read -p "Enter your name: " git_name
+read -p "Enter your email: " git_email
+
+# Configure Git
+echo -e "${YELLOW}Configuring Git...${NC}"
+git config --global user.name "$git_name"
+git config --global user.email "$git_email"
+
+# Create SSH key if it doesn't exist
+if [ ! -f ~/.ssh/id_rsa.pub ]; then
+    echo -e "${YELLOW}Creating SSH key...${NC}"
+    ssh-keygen -t rsa -b 4096 -C "$git_email"
+    
+    echo -e "${YELLOW}Your SSH public key is:${NC}"
+    cat ~/.ssh/id_rsa.pub
+    echo -e "${YELLOW}Please add this key to your GitHub account:${NC}"
+    echo -e "${YELLOW}1. Go to https://github.com/settings/keys${NC}"
+    echo -e "${YELLOW}2. Click 'New SSH key'${NC}"
+    echo -e "${YELLOW}3. Paste the key above${NC}"
+    echo -e "${YELLOW}4. Click 'Add SSH key'${NC}"
+    
+    read -p "Press Enter after you've added the key to GitHub..."
+fi
+
+# Test SSH connection
+echo -e "${YELLOW}Testing SSH connection to GitHub...${NC}"
+ssh -T git@github.com
+
+# Clone repository
+echo -e "${YELLOW}Cloning repository...${NC}"
+cd ~
+git clone git@github.com:Kenju-Daw/S24-RAG-Assistant.git
+cd S24-RAG-Assistant
+
+echo -e "${GREEN}Git setup complete!${NC}"
+echo -e "${GREEN}You can now use 'git pull' to get updates and 'git push' to upload changes.${NC}"
