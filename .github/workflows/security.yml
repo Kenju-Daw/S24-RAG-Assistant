@@ -31,7 +31,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Run OWASP Dependency Check
-        working-directory: app
         run: |
           gradle dependencyCheckAnalyze --no-daemon || true
 

@@ -36,7 +36,6 @@ jobs:
         continue-on-error: true
 
       - name: Assemble Debug
-        working-directory: app
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK artifact

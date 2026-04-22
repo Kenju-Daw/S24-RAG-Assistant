@@ -24,7 +24,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build Release APK
-        working-directory: app
         run: gradle assembleRelease --no-daemon
 
       - name: Create GitHub Release

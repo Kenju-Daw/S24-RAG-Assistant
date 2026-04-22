@@ -1,0 +1,89 @@
+Scaffold an Android project for Project Claw inside a new directory called app/ at the repo root.
+
+Context: See docs/architectural_blueprint.md and README.md for full project context. Project Claw is a headless Android AI inference engine that runs Gemma 4 E2B via LiteRT-LM, exposed as an OpenAI-compatible REST API on 127.0.0.1:8080.
+
+== WHAT TO CREATE ==
+
+1. app/build.gradle.kts
+   - applicationId = "com.kenjudaw.projectclaw"
+   - minSdk = 34
+   - targetSdk = 35
+   - compileSdk = 35
+   - kotlin jvm target 17
+   - plugins: android application, kotlin android, kotlin serialization
+   - dependencies:
+       implementation("com.google.ai.edge.litert:litert-lm:0.10.2")
+       implementation("io.ktor:ktor-server-netty:2.3.12")
+       implementation("io.ktor:ktor-server-core:2.3.12")
+       implementation("io.ktor:ktor-server-content-negotiation:2.3.12")
+       implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+       implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+       implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
+       implementation("androidx.core:core-ktx:1.13.1")
+
+2. app/settings.gradle.kts
+   - rootProject.name = "ProjectClaw"
+   - include the app module
+   - add Google Maven repo and Maven Central
+
+3. app/gradle.properties
+   - android.useAndroidX=true
+   - kotlin.code.style=official
+
+4. app/src/main/AndroidManifest.xml
+   - package: com.kenjudaw.projectclaw
+   - permissions: FOREGROUND_SERVICE, FOREGROUND_SERVICE_SPECIAL_USE, WAKE_LOCK, INTERNET, READ_EXTERNAL_STORAGE
+   - declare InferenceService with android:foregroundServiceType="specialUse" and android:exported="false"
+   - declare MainActivity as launcher activity with intent filter ACTION_MAIN / CATEGORY_LAUNCHER
+
+5. app/src/main/java/com/kenjudaw/projectclaw/InferenceService.kt
+   - extends Service
+   - on onCreate: acquire PowerManager.PARTIAL_WAKE_LOCK named "ProjectClaw:InferenceLock"
+   - on onStartCommand: show a persistent foreground notification (channel id "inference_channel", title "Project Claw", text "Inference engine running")
+   - launch a coroutine on Dispatchers.IO that calls KtorServer.start()
+   - on onDestroy: release wake lock, stop ktor server
+   - return START_STICKY from onStartCommand
+
+6. app/src/main/java/com/kenjudaw/projectclaw/LlmEngine.kt
+   - singleton object LlmEngine
+   - private var engine: Any? = null (placeholder type until LiteRT-LM is integrated)
+   - fun init(context: Context, modelPath: String): Unit
+     // TODO: Replace with: LlmEngine.create(context, modelPath, LlmEngine.Options.Builder().setPreferredBackend(LlmEngine.Backend.GPU).build())
+     // Reference: https://ai.google.dev/edge/litert-lm/android
+   - fun generate(prompt: String, onToken: (String) -> Unit): Unit
+     // TODO: Replace with actual session.generateResponseAsync()
+     // For now, simulate: onToken("Hello from stub engine")
+   - fun close(): Unit
+     // TODO: engine?.close()
+
+7. app/src/main/java/com/kenjudaw/projectclaw/KtorServer.kt
+   - use ktor embeddedServer with Netty on host "127.0.0.1" port 8080
+   - install ContentNegotiation with kotlinx json
+   - data classes (all @Serializable):
+       ChatMessage(role: String, content: String)
+       ChatCompletionRequest(model: String, messages: List<ChatMessage>, stream: Boolean = false)
+       ChatChoice(index: Int, message: ChatMessage, finish_reason: String)
+       ChatCompletionResponse(id: String, object: String, model: String, choices: List<ChatChoice>)
+   - route POST /v1/chat/completions:
+       receive ChatCompletionRequest
+       if stream is false: return ChatCompletionResponse with stub assistant message
+       if stream is true: respond with status 200, content type "text/event-stream", flush chunks as "data: {...}\n\n" SSE format
+   - fun start() that calls server.start(wait = true)
+   - fun stop() that calls server.stop()
+
+8. app/src/main/java/com/kenjudaw/projectclaw/MainActivity.kt
+   - AppCompatActivity
+   - onCreate: call startForegroundService(Intent(this, InferenceService::class.java))
+   - show a simple TextView: "Project Claw running on 127.0.0.1:8080"
+
+== DO NOT ==
+- Do not write any unit tests
+- Do not implement real LiteRT-LM calls (stubs only with TODO comments)
+- Do not add any UI beyond the single TextView in MainActivity
+- Do not modify anything in the archive/ directory
+
+== ACCEPTANCE CRITERIA ==
+- All Kotlin files use proper imports and are syntactically valid
+- Ktor route returns valid JSON for non-streaming requests
+- SSE format is correct for streaming requests (data: prefix, double newline terminator)
+- AndroidManifest foreground service declaration is complete and correct for Android 14+
