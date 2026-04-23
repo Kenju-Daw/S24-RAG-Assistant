@@ -76,13 +76,16 @@ A persistent, on-device LLM server running as an Android Foreground Service. Exp
 ```
 project-claw/
 ├── README.md
+├── build.gradle.kts                   # Root build config
+├── settings.gradle.kts                # Root settings
+├── gradle.properties                  # Gradle flags
+├── .github/
+│   └── workflows/                     # CI/CD pipelines
 ├── docs/
 │   └── architectural_blueprint.md     # Full technical spec
 ├── research/
 │   └── mediapipe_vs_litert_lm.md      # Runtime comparison analysis
 ├── app/                               # Android project (Phase 1+)
-│   ├── build.gradle.kts
-│   ├── settings.gradle.kts
 │   └── src/main/
 │       ├── AndroidManifest.xml
 │       └── java/com/kenjudaw/projectclaw/
@@ -101,10 +104,10 @@ project-claw/
 - [x] Architecture researched and documented
 - [x] Runtime decision: LiteRT-LM v0.10.2 (see `research/`)
 - [x] Repo initialized on GitHub
-- [ ] **Phase 0:** Hardware validation — install [AI Edge Gallery](https://github.com/google-ai-edge/gallery) on S24U
-- [ ] **Phase 1:** Android project scaffold (Gradle + Kotlin DSL)
-- [ ] **Phase 2:** Ktor HTTP server + OpenAI compatibility layer
-- [ ] **Phase 3:** LiteRT-LM engine integration
+- [x] **Phase 0:** Hardware validation — ✅ Confirmed Gemma 4 runs on Adreno 750 via AI Edge Gallery
+- [x] **Phase 1:** Android project scaffold — ✅ Project structure fixed and CI/CD pipelines running
+- [x] **Phase 2:** Ktor HTTP server + OpenAI compatibility layer — ✅ Implemented `/v1/chat/completions`
+- [x] **Phase 3:** LiteRT-LM engine integration — ✅ Connected real v0.10.2 Kotlin API and GPU backend
 - [ ] **Phase 4:** Native C++/JNI bridge (zero-copy optimization)
 - [ ] **Phase 5:** Hardening (memory, thermals, security)
 - [ ] **Phase 6:** Agent integration
