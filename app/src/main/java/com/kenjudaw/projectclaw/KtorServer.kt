@@ -1,5 +1,6 @@
 package com.kenjudaw.projectclaw
 
+import android.content.res.AssetManager
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -15,12 +16,31 @@ import kotlinx.serialization.json.Json
 import java.util.UUID
 
 @Serializable
-data class ChatMessage(val role: String, val content: String)
+data class ToolFunction(val name: String, val description: String? = null, val parameters: kotlinx.serialization.json.JsonObject? = null)
+
+@Serializable
+data class Tool(val type: String, val function: ToolFunction)
+
+@Serializable
+data class ToolCall(val id: String, val type: String, val function: ToolFunctionCall)
+
+@Serializable
+data class ToolFunctionCall(val name: String, val arguments: String)
+
+@Serializable
+data class ChatMessage(
+    val role: String,
+    val content: String? = null,
+    val tool_calls: List<ToolCall>? = null,
+    val tool_call_id: String? = null
+)
 
 @Serializable
 data class ChatCompletionRequest(
     val model: String,
     val messages: List<ChatMessage>,
+    val tools: List<Tool>? = null,
+    val tool_choice: String? = "auto",
     val stream: Boolean = false,
     val max_tokens: Int = 4096,
     val temperature: Float = 0.7f
@@ -58,10 +78,11 @@ data class ChatCompletionChunk(
 object KtorServer {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private var assetManager: AssetManager? = null
 
     private val server: ApplicationEngine = embeddedServer(
         factory = Netty,
-        host = "127.0.0.1",
+        host = "0.0.0.0",
         port = 8080
     ) {
         install(ContentNegotiation) {
@@ -69,6 +90,13 @@ object KtorServer {
         }
 
         routing {
+            get("/") {
+                call.respondText(
+                    assetManager?.open("web/index.html")?.bufferedReader()?.use { it.readText() } ?: "Index not found",
+                    ContentType.Text.Html
+                )
+            }
+
             get("/health") {
                 if (LlmEngine.isInitialized) {
                     call.respondText("Project Claw OK - Engine Ready", status = HttpStatusCode.OK)
@@ -81,13 +109,30 @@ object KtorServer {
                 val request = call.receive<ChatCompletionRequest>()
                 val requestId = "chatcmpl-${UUID.randomUUID()}"
 
-                // Simplified prompt extraction - assume last message is user for now
-                // In Phase 5 we will build the full conversation history
-                val prompt = request.messages.lastOrNull { it.role == "user" }?.content ?: ""
-
                 if (!LlmEngine.isInitialized) {
                     call.respond(HttpStatusCode.ServiceUnavailable, "Engine not initialized")
                     return@post
+                }
+
+                // Building the Gemma 4 formatted prompt with context and tools
+                val formattedPrompt = buildString {
+                    // Inject Tool Definitions if present
+                    request.tools?.let {
+                        append("[AVAILABLE_TOOLS]\n")
+                        append(json.encodeToString(it))
+                        append("\n")
+                    }
+
+                    // Append Conversation History
+                    request.messages.forEach { msg ->
+                        append("<start_of_turn>${msg.role}\n")
+                        msg.content?.let { append(it) }
+                        msg.tool_calls?.forEach { tc ->
+                            append("\n<call:${tc.function.name}${tc.function.arguments}>")
+                        }
+                        append("<end_of_turn>\n")
+                    }
+                    append("<start_of_turn>model\n")
                 }
 
                 if (request.stream) {
@@ -98,7 +143,7 @@ object KtorServer {
                     ) {
                         try {
                             LlmEngine.generate(
-                                userMessage = prompt,
+                                formattedPrompt = formattedPrompt,
                                 onToken = { token ->
                                     val chunk = ChatCompletionChunk(
                                         id = requestId,
@@ -119,7 +164,6 @@ object KtorServer {
                                     flush()
                                 },
                                 onError = { t ->
-                                    // Log or handle error here
                                     write("event: error\ndata: ${t.message}\n\n")
                                     flush()
                                 }
@@ -131,7 +175,7 @@ object KtorServer {
                     }
                 } else {
                     try {
-                        val fullResponse = LlmEngine.generateBlocking(prompt)
+                        val fullResponse = LlmEngine.generateBlocking(formattedPrompt)
 
                         val response = ChatCompletionResponse(
                             id = requestId,
@@ -143,7 +187,7 @@ object KtorServer {
                                     finish_reason = "stop"
                                 )
                             ),
-                            usage = Usage(0, 0, 0) // Usage stats mock
+                            usage = Usage(0, 0, 0)
                         )
                         call.respond(HttpStatusCode.OK, response)
                     } catch (e: Exception) {
@@ -154,7 +198,8 @@ object KtorServer {
         }
     }
 
-    fun start() {
+    fun start(assets: AssetManager) {
+        assetManager = assets
         server.start(wait = true)
     }
 

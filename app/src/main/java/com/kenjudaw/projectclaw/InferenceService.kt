@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.res.AssetManager
 import android.os.IBinder
 import android.os.PowerManager
 import kotlinx.coroutines.CoroutineScope
@@ -53,18 +54,26 @@ class InferenceService : Service() {
         ))
 
         serviceScope.launch {
-            // Phase 3: Initialize engine on IO thread (blocks for 5-15s on first run)
-            LlmEngine.init()
+            try {
+                // Phase 3: Initialize engine on IO thread (blocks for 5-15s on first run)
+                LlmEngine.init()
 
-            // Update notification to show ready state
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.notify(NOTIFICATION_ID, buildNotification(
-                title = "Project Claw",
-                text = "Ready · 127.0.0.1:8080"
-            ))
+                // Update notification to show ready state
+                val nm = getSystemService(NotificationManager::class.java)
+                nm.notify(NOTIFICATION_ID, buildNotification(
+                    title = "Project Claw",
+                    text = "Ready · 127.0.0.1:8080"
+                ))
 
-            // Start Ktor HTTP server (blocks until stopped)
-            KtorServer.start()
+                // Start Ktor HTTP server (blocks until stopped)
+                KtorServer.start(assets)
+            } catch (e: Exception) {
+                val nm = getSystemService(NotificationManager::class.java)
+                nm.notify(NOTIFICATION_ID, buildNotification(
+                    title = "Project Claw Error",
+                    text = "Engine failed: ${e.message}"
+                ))
+            }
         }
 
         return START_STICKY

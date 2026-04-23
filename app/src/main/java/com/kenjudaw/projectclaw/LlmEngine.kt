@@ -42,12 +42,18 @@ object LlmEngine {
     fun init(modelPath: String = DEFAULT_MODEL_PATH) {
         if (isInitialized) return
 
+        // Prefer GPU (ML Drift) but fallback to CPU if initialization fails
+        val backend = try {
+            Backend.GPU()
+        } catch (e: Exception) {
+            Backend.CPU()
+        }
+
         val config = EngineConfig(
             modelPath = modelPath,
-            backend = Backend.GPU(),                // ML Drift delegate — Adreno 750
-            // Phase 5: add visionBackend = Backend.GPU() for multimodal
-            maxNumTokens = 4096,                    // conservative; model supports 128K
-            cacheDir = File(modelPath).parent       // GPU shader cache alongside model
+            backend = backend,
+            maxNumTokens = 4096,
+            cacheDir = File(modelPath).parent
         )
 
         engine = Engine(config).also { it.initialize() }
@@ -59,24 +65,21 @@ object LlmEngine {
      * Generate a streaming response. Each token is delivered via [onToken] as it arrives.
      * Call ONLY after [init] completes.
      *
-     * @param userMessage Raw user message (Gemma 4 control tokens applied internally)
+     * @param formattedPrompt Pre-formatted prompt string (control tokens already applied)
      * @param onToken Called per-token during streaming
      * @param onDone Called when generation is complete
      * @param onError Called if inference fails
      */
     fun generate(
-        userMessage: String,
+        formattedPrompt: String,
         onToken: (String) -> Unit,
         onDone: () -> Unit = {},
         onError: (Throwable) -> Unit = {}
     ) {
         check(isInitialized) { "LlmEngine not initialized. Call init() first." }
 
-        // Gemma 4 control token format (verified from AI Edge Gallery source)
-        val formatted = "<start_of_turn>user\n$userMessage<end_of_turn>\n<start_of_turn>model\n"
-
         session!!.generateContentStream(
-            inputData = listOf(InputData.Text(formatted)),
+            inputData = listOf(InputData.Text(formattedPrompt)),
             responseCallback = object : ResponseCallback {
                 override fun onNext(response: String) = onToken(response)
                 override fun onDone() = onDone()
@@ -89,10 +92,9 @@ object LlmEngine {
      * Generate a full response without streaming (blocking).
      * Useful for non-SSE requests.
      */
-    fun generateBlocking(userMessage: String): String {
+    fun generateBlocking(formattedPrompt: String): String {
         check(isInitialized) { "LlmEngine not initialized. Call init() first." }
-        val formatted = "<start_of_turn>user\n$userMessage<end_of_turn>\n<start_of_turn>model\n"
-        return session!!.generateContent(listOf(InputData.Text(formatted)))
+        return session!!.generateContent(listOf(InputData.Text(formattedPrompt)))
     }
 
     /** Release all native resources. Call from InferenceService.onDestroy() */
